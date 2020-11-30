@@ -1,0 +1,171 @@
+version: "3.7"
+
+networks:
+    main:
+
+services:
+
+    haproxy:
+        image: haproxy
+        container_name: haproxy
+        hostname: haproxy
+        ports:
+            - "9000:9000"
+        volumes:
+            - ./configs/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg
+        networks:
+            - main
+        depends_on:
+            - ch1 
+            - ch2
+
+    zk1:
+        image: zookeeper
+        container_name: zk1
+        hostname: zk1
+        restart: always
+
+        expose:
+            - "2181"
+
+        environment:
+            ZOO_MY_ID: "1"
+            ZOO_SERVERS: server.1=0.0.0.0:2888:3888;2181 server.2=zk2:2888:3888;2181 server.3=zk3:2888:3888;2181
+        networks:
+            - main
+    zk2:
+        image: zookeeper
+        container_name: zk2
+        hostname: zk2
+        restart: always
+        expose:
+            - "2181"
+
+        environment:
+            ZOO_MY_ID: "2"
+            ZOO_SERVERS: server.1=zk1:2888:3888;2181 server.2=0.0.0.0:2888:3888;2181 server.3=zk3:2888:3888;2181
+        networks:
+            - main
+    zk3:
+        image: zookeeper
+        container_name: zk3
+        hostname: zk3
+        restart: always
+        expose:
+            - "2181"
+
+        environment:
+            ZOO_MY_ID: "3"
+            ZOO_SERVERS: server.1=zk1:2888:3888;2181 server.2=zk2:2888:3888;2181 server.3=0.0.0.0:2888:3888;2181
+        networks:
+            - main
+
+    ch1:
+        image: yandex/clickhouse-server
+        container_name: ch1
+        hostname: ch1
+        restart: always
+        networks:
+            - main
+
+        expose:
+            # replica sync port
+            - "9010"
+            # client port
+            - "9000"
+
+        depends_on:
+            - zk1 
+            - zk2
+            - zk3
+
+        ports:
+            - "9001:9000"
+
+        volumes:
+            - type: bind
+              source: ./log_fst
+              target: /var/log/clickhouse-server
+            - type: bind
+              source: ./data_fst
+              target: /var/lib/clickhouse-server
+            - type: bind
+              source: ./configs/click1_config.xml
+              target: /etc/clickhouse-server/config.xml
+        ulimits:
+            nofile:
+                soft: 262144
+                hard: 262144
+
+
+    ch2:
+        image: yandex/clickhouse-server
+        container_name: ch2
+        hostname: ch2
+        restart: always
+        networks:
+            - main
+        ports:
+            - "9002:9000"
+
+        expose:
+            # replica sync port
+            - "9011"
+            # client port
+            - "9000"
+
+        depends_on:
+            - zk1
+            - zk2
+            - zk3
+
+        volumes:
+            - type: bind
+              source: ./log_snd
+              target: /var/log/clickhouse-server
+            - type: bind
+              source: ./data_snd
+              target: /var/lib/clickhouse-server
+            - type: bind
+              source: ./configs/click2_config.xml
+              target: /etc/clickhouse-server/config.xml
+        ulimits:
+            nofile:
+                soft: 262144
+                hard: 262144
+
+    ch3:
+        image: yandex/clickhouse-server
+        container_name: ch3
+        hostname: ch3
+        restart: always
+        networks:
+            - main
+        ports:
+            - "9003:9000"
+
+        expose:
+            # replica sync port
+            - "9012"
+            # client port
+            - "9000"
+
+        depends_on:
+            - zk1
+            - zk2
+            - zk3
+
+        volumes:
+            - type: bind
+              source: ./log_thd
+              target: /var/log/clickhouse-server
+            - type: bind
+              source: ./data_thd
+              target: /var/lib/clickhouse-server
+            - type: bind
+              source: ./configs/click3_config.xml
+              target: /etc/clickhouse-server/config.xml
+        ulimits:
+            nofile:
+                soft: 262144
+                hard: 262144
